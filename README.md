@@ -8,3 +8,7 @@ I was just missing to write something in Go. So here is a very basic Tetris clon
 - Maybe add sounds
 - Add AI
 - Add a multiplayer mode
+
+## Screenshots
+
+[Go-Tetris](./screen1.png)
