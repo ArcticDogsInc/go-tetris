@@ -9,6 +9,10 @@ I was just missing to write something in Go. So here is a very basic Tetris clon
 - Add AI
 - Add a multiplayer mode
 
+## How to run
+
+`go run -v .` 
+
 ## Screenshots
 
 [Go-Tetris](./screen1.png)
