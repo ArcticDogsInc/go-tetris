@@ -21,20 +21,27 @@ const (
 )
 
 type Board struct {
-	upperMatrix  [][]int
-	ghostMatrix  [][]int
-	solidMatrix  [][]int
-	storedMatrix [][]int
+	/* Temporary matrix for the current real mino, while being in this
+	   matrix, the mino does not trigger rows cleaning */
+	upperMatrix [][]int
+	/* Matrix for the ghost (max-fallen) mino related to the current real mino */
+	ghostMatrix [][]int
+	/* Matrix for the real minoes stuck and solidified, while in this matrix,
+	   the minoes can trigger rows cleaning */
+	solidMatrix [][]int
+	/* Matrix for the current reserved mino */
+	reservedMatrix [][]int
+	/* Matrix for the next coming mino */
 	futureMatrix [][]int
 }
 
 func NewBoard() *Board {
 	var b = Board{
-		upperMatrix:  [][]int{},
-		ghostMatrix:  [][]int{},
-		solidMatrix:  [][]int{},
-		storedMatrix: [][]int{},
-		futureMatrix: [][]int{},
+		upperMatrix:    [][]int{},
+		ghostMatrix:    [][]int{},
+		solidMatrix:    [][]int{},
+		reservedMatrix: [][]int{},
+		futureMatrix:   [][]int{},
 	}
 
 	tbprint(0, 0, termbox.ColorWhite, termbox.ColorBlack, "New board crated")
@@ -54,9 +61,9 @@ func NewBoard() *Board {
 		b.ghostMatrix[x] = make([]int, board_width_blocks)
 	}
 
-	b.storedMatrix = make([][]int, small_height_blocks)
-	for x := 0; x < len(b.storedMatrix); x++ {
-		b.storedMatrix[x] = make([]int, small_width_blocks)
+	b.reservedMatrix = make([][]int, small_height_blocks)
+	for x := 0; x < len(b.reservedMatrix); x++ {
+		b.reservedMatrix[x] = make([]int, small_width_blocks)
 	}
 
 	b.futureMatrix = make([][]int, small_height_blocks)
@@ -90,7 +97,6 @@ func (b *Board) ClearRow(r int) {
 }
 
 func (b *Board) Draw() {
-
 	b.drawRect(board_width_chars+2, board_height_chars+2, 0, 0)
 	b.drawRect(small_width_chars+2, small_height_chars+2, -17, -8+16)
 	b.drawRect(small_width_chars+2, small_height_chars+2, +17, -8)
@@ -108,7 +114,7 @@ func (b *Board) Draw() {
 	b.drawMatrix(b.ghostMatrix, board_height_chars, board_width_chars, offx_board, offy_board, '(', ')', termbox.ColorWhite, termbox.ColorDefault, false)
 	b.drawMatrix(b.upperMatrix, board_height_chars, board_width_chars, offx_board, offy_board, '[', ']', termbox.ColorDefault, termbox.ColorDefault, true)
 	b.drawMatrix(b.solidMatrix, board_height_chars, board_width_chars, offx_board, offy_board, '[', ']', termbox.ColorDefault, termbox.ColorDefault, true)
-	b.drawMatrix(b.storedMatrix, small_height_chars, small_width_chars, offx_small_stored, offy_small_stored, '[', ']', termbox.ColorDefault, termbox.ColorDefault, true)
+	b.drawMatrix(b.reservedMatrix, small_height_chars, small_width_chars, offx_small_stored, offy_small_stored, '[', ']', termbox.ColorDefault, termbox.ColorDefault, true)
 	b.drawMatrix(b.futureMatrix, small_height_chars, small_width_chars, offx_small_future, offy_small_future, '[', ']', termbox.ColorDefault, termbox.ColorDefault, true)
 }
 
@@ -167,7 +173,7 @@ func (b *Board) shapeToColor(v int) termbox.Attribute {
 	case int(t_S):
 		c = termbox.ColorBlue
 	case int(t_T):
-		c = termbox.ColorMagenta
+		c = termbox.ColorLightRed
 	case int(t_Z):
 		c = termbox.ColorBlue | termbox.ColorYellow
 	default:
@@ -193,7 +199,8 @@ func (b *Board) ClearMatrix(matrix [][]int) {
 	}
 }
 
-func (b *Board) MinoOnMatrix(m *Mino, matrix [][]int, posy, posx int, clear bool) error {
+// ProjectMino sets a given mino in the given matrix between board's game matrixes with an xy pos offset
+func (b *Board) ProjectMino(m *Mino, matrix [][]int, posy, posx int, clear bool) error {
 	if m == nil {
 		return nil
 	}

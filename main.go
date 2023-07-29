@@ -9,28 +9,26 @@ import (
 )
 
 func main() {
-
 	if err := termbox.Init(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 	defer termbox.Close()
 
-	GameObj := NewGame()
-
 	evChan := make(chan termbox.Event)
-
 	go func() {
 		for {
 			evChan <- termbox.PollEvent()
 		}
 	}()
 
+	game := NewGame()
 	go func() {
 		for {
 			select {
 			case <-time.After(16 * time.Millisecond):
-				DrawScreen(GameObj)
+				UpdateScreen(game)
+
 			case ev := <-evChan:
 				switch ev.Type {
 				case termbox.EventKey:
@@ -38,41 +36,7 @@ func main() {
 						gracefulStop()
 						os.Exit(0)
 					}
-					mino := GameObj.Mino
-					switch ev.Key {
-					case termbox.KeyArrowUp:
-						GameObj.Rotate(mino)
-					case termbox.KeyArrowRight:
-						if mino != nil && GameObj.PermittedMoves(mino)["right"] {
-							mino.position.x += 1
-						}
-					case termbox.KeyArrowLeft:
-						if mino != nil && GameObj.PermittedMoves(mino)["left"] {
-							mino.position.x -= 1
-						}
-					case termbox.KeyArrowDown:
-						if mino != nil {
-							if GameObj.PermittedMoves(mino)["down"] {
-								GameObj.lastMoveTime = time.Now()
-								mino.position.y += 1
-							} else {
-								GameObj.lastMoveTime = time.Time{}.Add(1)
-							}
-						}
-					case termbox.KeySpace:
-						if mino != nil {
-							if GameObj.PermittedMoves(mino)["down"] {
-								_, ghost := GameObj.MaxFall(mino)
-								GameObj.Mino = ghost
-								GameObj.lastMoveTime = time.Time{}.Add(1)
-							}
-						}
-
-					case termbox.KeyEnter:
-						if mino != nil {
-							GameObj.ReserveMino()
-						}
-					}
+					HandleKey(ev, game)
 				}
 			}
 		}
@@ -83,15 +47,55 @@ func main() {
 	}
 }
 
-func DrawScreen(g *Game) {
+func HandleKey(ev termbox.Event, game *Game_t) {
+	switch ev.Key {
+	case termbox.KeyArrowUp:
+		game.Rotate(game.MinoReal)
+
+	case termbox.KeyArrowRight:
+		if game.MinoReal != nil && game.PermittedMoves(game.MinoReal)["right"] {
+			game.MinoReal.position.x += 1
+		}
+
+	case termbox.KeyArrowLeft:
+		if game.MinoReal != nil && game.PermittedMoves(game.MinoReal)["left"] {
+			game.MinoReal.position.x -= 1
+		}
+
+	case termbox.KeyArrowDown:
+		if game.MinoReal != nil {
+			if game.PermittedMoves(game.MinoReal)["down"] {
+				game.lastMoveTime = time.Now()
+				game.MinoReal.position.y += 1
+			} else {
+				game.lastMoveTime = time.Time{}.Add(1)
+			}
+		}
+
+	case termbox.KeySpace:
+		if game.MinoReal != nil {
+			if game.PermittedMoves(game.MinoReal)["down"] {
+				_, ghost := game.MaxFall(game.MinoReal)
+				game.MinoReal = ghost
+				game.lastMoveTime = time.Time{}.Add(1)
+			}
+		}
+
+	case termbox.KeyEnter:
+		if game.MinoReal != nil {
+			game.ReserveMino()
+		}
+	}
+}
+
+func UpdateScreen(game *Game_t) {
 	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
+	defer termbox.Flush()
 
 	w, h := termbox.Size()
 	if w < 20 || h < 40 {
 		tbprint(0, 0, termbox.ColorRed, termbox.ColorDefault, "Terminal is too small")
-	} else {
-		g.Update()
+		return
 	}
-
-	termbox.Flush()
+	game.Update()
 }

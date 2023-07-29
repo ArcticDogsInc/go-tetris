@@ -11,7 +11,7 @@ import (
 	"github.com/nsf/termbox-go"
 )
 
-type Game struct {
+type Game_t struct {
 	Score              int
 	Streak             int
 	moveInterval       time.Duration
@@ -19,15 +19,15 @@ type Game struct {
 	lastSpeedIncrement time.Time
 	gamestartTime      time.Time
 	board              Board
-	Mino               *Mino
+	MinoReal           *Mino
 	MinoGhost          *Mino
 	MinoReserved       *Mino
 	MinoFuture         *Mino
 	ResEN              bool
 }
 
-func NewGame() *Game {
-	return &Game{
+func NewGame() *Game_t {
+	return &Game_t{
 		Score:              0,
 		Streak:             0,
 		moveInterval:       1000 * time.Millisecond,
@@ -35,7 +35,7 @@ func NewGame() *Game {
 		lastSpeedIncrement: time.Now(),
 		gamestartTime:      time.Now(),
 		board:              *NewBoard(),
-		Mino:               nil,
+		MinoReal:           nil,
 		MinoGhost:          nil,
 		MinoReserved:       nil,
 		MinoFuture:         nil,
@@ -43,69 +43,67 @@ func NewGame() *Game {
 	}
 }
 
-func (g *Game) ReserveMino() {
-	if g.Mino == nil {
+func (g *Game_t) ReserveMino() {
+	if g.MinoReal == nil {
 		return
 	}
 	if !g.ResEN && g.MinoReserved == nil {
 		return
 	}
 
-	if g.ResEN && g.MinoReserved == nil && g.Mino != nil {
+	if g.ResEN && g.MinoReserved == nil && g.MinoReal != nil {
 		// Store current mino
-		g.MinoReserved = g.Mino
-		g.Mino = nil
+		g.MinoReserved = g.MinoReal
+		g.MinoReal = nil
 		return
 	}
 
-	if g.ResEN && g.MinoReserved != nil && g.Mino != nil {
+	if g.ResEN && g.MinoReserved != nil && g.MinoReal != nil {
 		// Exchange current mino with reserved one
-		t := g.Mino
-		g.Mino = g.MinoReserved
+		t := g.MinoReal
+		g.MinoReal = g.MinoReserved
 		g.MinoReserved = t
 		g.ResEN = false
 		return
 	}
 }
 
-func (g *Game) GameOver() {
-	tbprint(0, 1, termbox.ColorRed, termbox.ColorBlack, "Game over")
+func (g *Game_t) GameOver() {
+	tbprint(0, 1, termbox.ColorRed, termbox.ColorBlack, "Game_t over")
 	time.Sleep(1 * time.Second)
 	gracefulStop()
 	os.Exit(0)
 }
 
-func (g *Game) Update() {
+func (g *Game_t) Update() {
 	var err error
-	if g.Mino == nil {
+	if g.MinoReal == nil {
 		g.NewMino()
 		g.ResEN = true
 	}
 
 	defer func() {
+		defer g.board.Draw()
 		tbprint(1, 1, termbox.ColorRed, termbox.ColorDefault, fmt.Sprintf("Score: %d, streak: %d, moveInterval: %s", g.Score, g.Streak, g.moveInterval))
-		// View moving blocks on the virtual board
-		if g.Mino != nil {
-			_, g.MinoGhost = g.MaxFall(g.Mino)
-			g.board.MinoOnMatrix(g.MinoGhost, g.board.ghostMatrix, g.MinoGhost.position.y, g.MinoGhost.position.x, true)
-			err = g.board.MinoOnMatrix(g.Mino, g.board.upperMatrix, g.Mino.position.y, g.Mino.position.x, true)
-			if err != nil {
-				log.Print(err)
-				g.GameOver()
-			}
-		} else {
+		if g.MinoReal == nil {
 			tbprint(1, 0, termbox.ColorRed, termbox.ColorDefault, "mino = NIL")
+			return
 		}
-		g.board.MinoOnMatrix(g.MinoFuture, g.board.futureMatrix, 0, 0, true)
-		g.board.MinoOnMatrix(g.MinoReserved, g.board.storedMatrix, 0, 0, true)
-
-		g.board.Draw()
+		_, g.MinoGhost = g.MaxFall(g.MinoReal)
+		g.board.ProjectMino(g.MinoFuture, g.board.futureMatrix, 0, 0, true)
+		g.board.ProjectMino(g.MinoReserved, g.board.reservedMatrix, 0, 0, true)
+		g.board.ProjectMino(g.MinoGhost, g.board.ghostMatrix, g.MinoGhost.position.y, g.MinoGhost.position.x, true)
+		err = g.board.ProjectMino(g.MinoReal, g.board.upperMatrix, g.MinoReal.position.y, g.MinoReal.position.x, true)
+		if err != nil {
+			log.Print(err)
+			g.GameOver()
+		}
 	}()
 
 	if time.Since(g.lastMoveTime) > g.moveInterval {
 		g.lastMoveTime = time.Now()
-
 		if time.Since(g.lastSpeedIncrement) > 60*time.Second {
+			// Descrease moveInterval to make it harder every 60 second(s)
 			g.lastSpeedIncrement = time.Now()
 			g.moveInterval -= 300 * time.Millisecond
 			if g.moveInterval < 200*time.Millisecond {
@@ -113,23 +111,22 @@ func (g *Game) Update() {
 			}
 		}
 
-		if !g.PermittedMoves(g.Mino)["down"] {
-
+		if !g.PermittedMoves(g.MinoReal)["down"] {
 			// Add stuck blocks to the solid board
-			g.board.MinoOnMatrix(g.Mino, g.board.solidMatrix, g.Mino.position.y, g.Mino.position.x, false)
-			g.Mino = nil
-
-			// Check if row is completed
-			g.checkScoring()
-
+			g.board.ProjectMino(g.MinoReal, g.board.solidMatrix, g.MinoReal.position.y, g.MinoReal.position.x, false)
+			// Destroy solidified mino in order to allow the creation of a new one later
+			g.MinoReal = nil
+			// clear eventually complete rows
+			g.clearCompleteRows()
 		} else {
-			g.Mino.position.y += 1
+			// Make the mino fall by one unit
+			g.MinoReal.position.y += 1
 		}
 	}
 
 }
 
-func (g *Game) checkScoring() {
+func (g *Game_t) clearCompleteRows() {
 	for y := 0; y < len(g.board.solidMatrix); y++ {
 		rawCompleted := true
 		for x := 0; x < len(g.board.solidMatrix[y]); x++ {
@@ -151,7 +148,7 @@ func (g *Game) checkScoring() {
 	}
 }
 
-func (g *Game) MaxFall(m *Mino) (int, *Mino) {
+func (g *Game_t) MaxFall(m *Mino) (int, *Mino) {
 	maxfall := 0
 	shadowMino := Mino{
 		shape: m.shape,
@@ -173,7 +170,7 @@ func (g *Game) MaxFall(m *Mino) (int, *Mino) {
 
 type moves_t map[string]bool
 
-func (g *Game) PermittedMoves(mino *Mino) moves_t {
+func (g *Game_t) PermittedMoves(mino *Mino) moves_t {
 	moves := moves_t{
 		"left":  true,
 		"right": true,
@@ -213,8 +210,8 @@ func (g *Game) PermittedMoves(mino *Mino) moves_t {
 	return moves
 }
 
-func (g *Game) NewMino() {
-	g.Mino = g.MinoFuture
+func (g *Game_t) NewMino() {
+	g.MinoReal = g.MinoFuture
 	m := Mino{
 		shape:    mino_t(rand.Intn(7)),
 		position: &pos_t{x: 4, y: 0},
@@ -226,8 +223,7 @@ func (g *Game) NewMino() {
 	g.MinoFuture = &m
 }
 
-func (g *Game) Rotate(mino *Mino) {
-
+func (g *Game_t) Rotate(mino *Mino) {
 	if mino == nil {
 		return
 	}
