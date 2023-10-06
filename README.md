@@ -1,5 +1,7 @@
 # Go-Tetris
 
+![Go-Tetris](screen1.png)
+
 I was just missing to write something in Go. So here is a very basic Tetris clone done using only [Termbox](https://github.com/nsf/termbox-go).
 
 ## TODOs
@@ -11,10 +13,8 @@ I was just missing to write something in Go. So here is a very basic Tetris clon
 
 ## How to run
 
-`go run -v .` 
+two ways to run the game
+
+- `go run -v .` 
 
 - win64 .exe in /bin
-
-## Screenshots
-
-![Go-Tetris](./screen1.png)
