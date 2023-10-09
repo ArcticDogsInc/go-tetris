@@ -17,4 +17,4 @@ two ways to run the game
 
 - `go run -v .` 
 
-- win64 .exe in /bin
+- win64 .exe in /bin (execute it from cmd line, be sure to have a large enough terminal)
